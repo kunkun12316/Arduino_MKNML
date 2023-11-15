@@ -202,35 +202,31 @@ void moveTask(void *pvParameters) {
 }
 
 void testTask(void *pvParameters) {
-    while (1) {
-
+    while (1) 
+    {    
+        long middle_speed = (L1_speed + R1_speed + L2_speed + R2_speed)/4;
+        if(L1_speed > middle_speed){
+          L1_ps--;
+        }else if(L1_speed < middle_speed){
+          L1_ps++;
+        }
+        if(R1_speed > middle_speed){
+          R1_ps--;
+        }else if(R1_speed < middle_speed){
+          R1_ps++;
+        }
+        if(L2_speed > middle_speed){
+          L2_ps--;
+        }else if(L2_speed < middle_speed){
+          L2_ps++;
+        }
+        if(R2_speed > middle_speed){
+          R2_ps--;
+        }else if(R2_speed < middle_speed){
+          R2_ps++;
+        }
         
-        // long middle_encoderPos = (L1_encoderPos + R1_encoderPos + L2_encoderPos + R2_encoderPos)/4;
-        // if(L1_encoderPos > middle_encoderPos){
-        //   L1_ps--;
-        // }else if(L1_encoderPos < middle_encoderPos){
-        //   L1_ps++;
-        // }
-        // if(R1_encoderPos > middle_encoderPos){
-        //   R1_ps--;
-        // }else if(R1_encoderPos < middle_encoderPos){
-        //   R1_ps++;
-        // }
-        // if(L2_encoderPos > middle_encoderPos){
-        //   L2_ps--;
-        // }else if(L2_encoderPos < middle_encoderPos){
-        //   L2_ps++;
-        // }
-        // if(R2_encoderPos > middle_encoderPos){
-        //   R2_ps--;
-        // }else if(R2_encoderPos < middle_encoderPos){
-        //   R2_ps++;
-        // }
-
-        // Serial.println("......速度更新完成......");
-        Serial.println("速度：");
-        Serial.print(L1_ps);Serial.print(" ");Serial.print(R1_ps);Serial.print(" ");Serial.print(L2_ps);Serial.print(" ");Serial.println(R2_ps);
-        delay(1000);
+        delay(200);
     }
 }
 
