@@ -1,23 +1,7 @@
 #include <Arduino.h>
 
 #include <Arduino_FreeRTOS.h>
-#include "pid.h"
-
-struct pid_calibration PID_data = {
-  .kp = 0.02, // Proportional gain
-  .ki = 0.01, // Integral gain
-  .kd = 0.01 // Derivative gain
-};
-
-struct pid_state PID_status = {
-  .actual = 0.01, // 测量的实际值
-  .target = 0.01, // 期望的值
-  .time_delta = 0.01, // 更新状态时应设置自上次采样/计算以来的时间
-  .previous_error = 0.01, //先前计算的实际与目标之间的误差(初始为零)
-  .integral = 0.01, // 积分误差随时间的总和
-  .output = 0.01 // 修正后的输出值由算法计算，对误差进行补偿
-};
-
+#include <PID_v1.h>
 
 // 定义电机控制引脚
 const int L1_IN1 = 2;const int L1_IN2 = 3; // 左上电机
@@ -29,24 +13,34 @@ const int L2_encoderPin = 20;
 const int R2_IN1 = 8;const int R2_IN2 = 9; // 右下电机
 const int R2_encoderPin = 21;
 
-char Serial_data = ' ';
-
 //各电机的占空比
 int Car_ps = 100;
-int L1_ps = Car_ps;
-int R1_ps = Car_ps;
-int L2_ps = Car_ps;
-int R2_ps = Car_ps;
+double L1_ps = Car_ps;
+double R1_ps = Car_ps;
+double L2_ps = Car_ps;
+double R2_ps = Car_ps;
 
-volatile long L1_encoderPos = 0;volatile long L1_last_encoderPos = 0;
+volatile long L1_encoderPos = 0;volatile long L1_last_encoderPos = 0; 
 volatile long R1_encoderPos = 0;volatile long R1_last_encoderPos = 0;
 volatile long L2_encoderPos = 0;volatile long L2_last_encoderPos = 0;
 volatile long R2_encoderPos = 0;volatile long R2_last_encoderPos = 0;
 
-unsigned long L1_now_Time = 0;long L1_last_time = 0;float L1_speed = 0.0;// 当前时间。上一次时间，存储速度
-unsigned long R1_now_Time = 0;long R1_last_time = 0;float R1_speed = 0.0;// 当前时间。上一次时间，存储速度
-unsigned long L2_now_Time = 0;long L2_last_time = 0;float L2_speed = 0.0;// 当前时间。上一次时间，存储速度
-unsigned long R2_now_Time = 0;long R2_last_time = 0;float R2_speed = 0.0;// 当前时间。上一次时间，存储速度
+//四个电机的平均速度
+double middle_speed = 0;
+
+// 当前时间。上一次时间，存储速度
+unsigned long L1_now_Time = 0;unsigned long L1_last_time = 0;double L1_speed = 0.0;
+unsigned long R1_now_Time = 0;unsigned long R1_last_time = 0;double R1_speed = 0.0;
+unsigned long L2_now_Time = 0;unsigned long L2_last_time = 0;double L2_speed = 0.0;
+unsigned long R2_now_Time = 0;unsigned long R2_last_time = 0;double R2_speed = 0.0;
+
+// 指定链接和初始调整参数
+double Kp=2, Ki=5, Kd=1;
+
+PID L1_PID(&L1_speed, &L1_ps, &middle_speed, Kp, Ki, Kd, DIRECT);
+PID R1_PID(&R1_speed, &R1_ps, &middle_speed, Kp, Ki, Kd, DIRECT);
+PID L2_PID(&L2_speed, &L2_ps, &middle_speed, Kp, Ki, Kd, DIRECT);
+PID R2_PID(&R2_speed, &R2_ps, &middle_speed, Kp, Ki, Kd, DIRECT);
 
 void L1_forward(int sp) // 左前轮前进
 {
@@ -201,10 +195,21 @@ void moveTask(void *pvParameters) {
   }
 }
 
+void PIDTask(void *pvParameters) {
+    while (1) 
+    {
+      L1_PID.Compute();
+      R1_PID.Compute();
+      L2_PID.Compute();
+      R2_PID.Compute();
+      delay(20);
+    } 
+}
+
 void testTask(void *pvParameters) {
     while (1) 
     {    
-        long middle_speed = (L1_speed + R1_speed + L2_speed + R2_speed)/4;
+        middle_speed = (L1_speed + R1_speed + L2_speed + R2_speed)/4;
         if(L1_speed > middle_speed){
           L1_ps--;
         }else if(L1_speed < middle_speed){
@@ -225,8 +230,7 @@ void testTask(void *pvParameters) {
         }else if(R2_speed < middle_speed){
           R2_ps++;
         }
-        
-        delay(200);
+      delay(200);
     }
 }
 
@@ -334,13 +338,21 @@ void R2_doEncoder()
 
 void setup()
 {
-  xTaskCreate(moveTask, "电机动作", 1000, NULL, 1, NULL); // 创建任务
-  xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 2, NULL); // 创建任务
+  xTaskCreate(moveTask, "电机动作", 1000, NULL, 1, NULL); 
+  xTaskCreate(PIDTask, "通过PID+编码器检测速度", 1000, NULL, 2, NULL); 
+  xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 3, NULL); 
+
 
   attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
   attachInterrupt(digitalPinToInterrupt(R1_encoderPin), R1_doEncoder, CHANGE);
   attachInterrupt(digitalPinToInterrupt(L2_encoderPin), L2_doEncoder, CHANGE);
   attachInterrupt(digitalPinToInterrupt(R2_encoderPin), R2_doEncoder, CHANGE);
+
+  // 打开PID控制
+  L1_PID.SetMode(AUTOMATIC);
+  R1_PID.SetMode(AUTOMATIC);
+  L2_PID.SetMode(AUTOMATIC);
+  R2_PID.SetMode(AUTOMATIC);
 
   Serial.begin(115200);
 
