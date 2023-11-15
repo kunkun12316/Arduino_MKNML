@@ -1,6 +1,5 @@
 #include <Arduino.h>
 
-#include <Encoder.h>
 #include <Arduino_FreeRTOS.h>
 #include "pid.h"
 
@@ -22,13 +21,13 @@ struct pid_state PID_status = {
 
 // 定义电机控制引脚
 const int L1_IN1 = 2;const int L1_IN2 = 3; // 左上电机
-const int L1_encoderPinA = 22;const int L1_encoderPinB = 23;Encoder L1_encoder(L1_encoderPinA,L1_encoderPinB);
+const int L1_encoderPin = 18;
 const int R1_IN1 = 4;const int R1_IN2 = 5; // 右上电机
-const int R1_encoderPinA = 24;const int R1_encoderPinB = 25;Encoder R1_encoder(R1_encoderPinA,R1_encoderPinB);
+const int R1_encoderPin = 19;
 const int L2_IN1 = 6;const int L2_IN2 = 7; // 左下电机
-const int L2_encoderPinA = 26;const int L2_encoderPinB = 27;Encoder L2_encoder(L2_encoderPinA,L2_encoderPinB);
+const int L2_encoderPin = 20;
 const int R2_IN1 = 8;const int R2_IN2 = 9; // 右下电机
-const int R2_encoderPinA = 28;const int R2_encoderPinB = 29;Encoder R2_encoder(R2_encoderPinA,R2_encoderPinB);
+const int R2_encoderPin = 21;
 
 char Serial_data = ' ';
 
@@ -39,12 +38,15 @@ int R1_ps = Car_ps;
 int L2_ps = Car_ps;
 int R2_ps = Car_ps;
 
-// 编码器位置
-volatile long encoderPos = 0; 
-volatile long L1_encoderPos = 0; 
-volatile long R1_encoderPos = 0; 
-volatile long L2_encoderPos = 0; 
-volatile long R2_encoderPos = 0; 
+volatile long L1_encoderPos = 0;volatile long L1_last_encoderPos = 0;
+volatile long R1_encoderPos = 0;volatile long R1_last_encoderPos = 0;
+volatile long L2_encoderPos = 0;volatile long L2_last_encoderPos = 0;
+volatile long R2_encoderPos = 0;volatile long R2_last_encoderPos = 0;
+
+unsigned long L1_now_Time = 0;long L1_last_time = 0;float L1_speed = 0.0;// 当前时间。上一次时间，存储速度
+unsigned long R1_now_Time = 0;long R1_last_time = 0;float R1_speed = 0.0;// 当前时间。上一次时间，存储速度
+unsigned long L2_now_Time = 0;long L2_last_time = 0;float L2_speed = 0.0;// 当前时间。上一次时间，存储速度
+unsigned long R2_now_Time = 0;long R2_last_time = 0;float R2_speed = 0.0;// 当前时间。上一次时间，存储速度
 
 void L1_forward(int sp) // 左前轮前进
 {
@@ -97,13 +99,6 @@ void R2_backward(int sp) // 右后轮后退
 {
   digitalWrite(R2_IN1, LOW);
   analogWrite(R2_IN2, sp);
-}
-
-long UP_encoder(Encoder& encoder_name)
-{
-  encoderPos = encoder_name.read();
-  // noInterrupts();
-  return encoderPos;
 }
 
 void moveTask(void *pvParameters) {
@@ -208,13 +203,8 @@ void moveTask(void *pvParameters) {
 
 void testTask(void *pvParameters) {
     while (1) {
-        L1_encoderPos = UP_encoder(L1_encoder);
-        R1_encoderPos = UP_encoder(R1_encoder);
-        L2_encoderPos = UP_encoder(L2_encoder);
-        R2_encoderPos = UP_encoder(R2_encoder);
+
         
-
-
         // long middle_encoderPos = (L1_encoderPos + R1_encoderPos + L2_encoderPos + R2_encoderPos)/4;
         // if(L1_encoderPos > middle_encoderPos){
         //   L1_ps--;
@@ -244,6 +234,106 @@ void testTask(void *pvParameters) {
     }
 }
 
+void L1_doEncoder()
+{
+  // 计算速度
+  L1_now_Time = millis();
+  if (L1_now_Time - L1_last_time >= 1000) // 每秒计算一次速度
+  {
+    L1_speed = (float)(L1_encoderPos - L1_last_encoderPos) / (float)(L1_now_Time - L1_last_time) * 1000.0;
+    Serial.print("Speed: ");
+    Serial.println(L1_speed);
+
+    L1_last_encoderPos = L1_encoderPos;
+    L1_last_time = L1_now_Time;
+  }
+
+  //L1_last_encoderPos = L1_encoderPos;
+  if (digitalRead(L1_encoderPin) == HIGH)
+  {
+    L1_encoderPos += 2;
+  }
+  else if (digitalRead(L1_encoderPin) == LOW)
+  {
+    L1_encoderPos += 2;
+  }
+}
+
+void R1_doEncoder()
+{
+  // 计算速度
+  R1_now_Time = millis();
+  if (R1_now_Time - R1_last_time >= 1000) // 每秒计算一次速度
+  {
+    R1_speed = (float)(R1_encoderPos - R1_last_encoderPos) / (float)(R1_now_Time - R1_last_time) * 1000.0;
+    Serial.print("Speed: ");
+    Serial.println(R1_speed);
+
+    R1_last_encoderPos = R1_encoderPos;
+    R1_last_time = R1_now_Time;
+  }
+
+  //L1_last_encoderPos = L1_encoderPos;
+  if (digitalRead(R1_encoderPin) == HIGH)
+  {
+    R1_encoderPos += 2;
+  }
+  else if (digitalRead(R1_encoderPin) == LOW)
+  {
+    R1_encoderPos += 2;
+  }
+}
+void L2_doEncoder()
+{
+  // 计算速度
+  L2_now_Time = millis();
+  if (L2_now_Time - L2_last_time >= 1000) // 每秒计算一次速度
+  {
+    L2_speed = (float)(L2_encoderPos - L2_last_encoderPos) / (float)(L2_now_Time - L2_last_time) * 1000.0;
+    Serial.print("Speed: ");
+    Serial.println(L2_speed);
+
+    L2_last_encoderPos = L2_encoderPos;
+    L2_last_time = L2_now_Time;
+  }
+
+  //L1_last_encoderPos = L1_encoderPos;
+  if (digitalRead(L2_encoderPin) == HIGH)
+  {
+    L2_encoderPos += 2;
+  }
+  else if (digitalRead(L2_encoderPin) == LOW)
+  {
+    L2_encoderPos += 2;
+  }
+}
+
+void R2_doEncoder()
+{
+  // 计算速度
+  R2_now_Time = millis();
+  if (R2_now_Time - R2_last_time >= 1000) // 每秒计算一次速度
+  {
+    R2_speed = (float)(R2_encoderPos - R2_last_encoderPos) / (float)(R2_now_Time - R2_last_time) * 1000.0;
+    Serial.print("Speed: ");
+    Serial.println(R2_speed);
+
+    R2_last_encoderPos = R2_encoderPos;
+    R2_last_time = R2_now_Time;
+  }
+
+  //L1_last_encoderPos = L1_encoderPos;
+  if (digitalRead(R2_encoderPin) == HIGH)
+  {
+    R2_encoderPos += 2;
+  }
+  else if (digitalRead(R2_encoderPin) == LOW)
+  {
+    R2_encoderPos += 2;
+  }
+}
+
+
 
 
 void setup()
@@ -251,16 +341,18 @@ void setup()
   xTaskCreate(moveTask, "电机动作", 1000, NULL, 1, NULL); // 创建任务
   xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 2, NULL); // 创建任务
 
+  attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(R1_encoderPin), R1_doEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(L2_encoderPin), L2_doEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(R2_encoderPin), R2_doEncoder, CHANGE);
+
   Serial.begin(115200);
 
-  pinMode(L1_encoderPinA, INPUT);
-  pinMode(L1_encoderPinB, INPUT);
-  pinMode(R1_encoderPinA, INPUT);
-  pinMode(R1_encoderPinB, INPUT);
-  pinMode(L2_encoderPinA, INPUT);
-  pinMode(L2_encoderPinB, INPUT);
-  pinMode(R2_encoderPinA, INPUT);
-  pinMode(R2_encoderPinB, INPUT);
+  pinMode(L1_encoderPin, INPUT);
+  pinMode(R1_encoderPin, INPUT);
+  pinMode(L2_encoderPin, INPUT);
+  pinMode(R2_encoderPin, INPUT);
+
 
   pinMode(L1_IN1, OUTPUT);
   pinMode(L1_IN2, OUTPUT);
