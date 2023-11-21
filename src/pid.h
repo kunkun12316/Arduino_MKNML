@@ -1,14 +1,14 @@
 /*
- * PID Controller Implementation in C
+ * C语言中的PID控制器实现
  * 
- * Created by Joshua Saxby (aka @saxbophone) on 1 Jan, 2016
+ * 由Joshua Saxby（又名@saxbophone）于2016年1月创建
  * 
- * My own attempt at implementing the PID algorithm in some (hopefully) clean, understandable C.
+ * 这是我尝试以一种（希望是）清晰易懂的C语言实现PID算法。
  *
- * See LICENSE for licensing details.
+ * 请查看许可详情，请查看LICENSE。
  */
 
-// protection against multiple includes
+// 防止多次包含
 #ifndef SAXBOPHONE_PID_H
 #define SAXBOPHONE_PID_H
 
@@ -16,55 +16,47 @@
 extern "C"{
 #endif
 
-
     typedef struct pid_calibration {
         /*
-         * struct PID_Calibration
+         * 结构体PID_Calibration
          * 
-         * Struct storing calibrated PID constants for a PID Controller
-         * These are used for tuning the algorithm and the values they take are
-         * dependent upon the application - (in other words, YMMV...)
+         * 用于存储PID控制器的校准常数的结构体
+         * 这些常数用于调整算法，它们取值取决于应用程序 - 换句话说，这取决于具体应用...
          */
-        double kp; // Proportional gain
-        double ki; // Integral gain
-        double kd; // Derivative gain
+        double kp; // 比例增益
+        double ki; // 积分增益
+        double kd; // 微分增益
     } PID_Calibration;
-
 
     typedef struct pid_state {
         /*
-         * struct PID_State
+         * 结构体PID_State
          * 
-         * Struct storing the current state of a PID Controller.
-         * This is used as the input value to the PID algorithm function, which also
-         * returns a PID_State struct reflecting the adjustments suggested by the algorithm.
+         * 用于存储PID控制器的当前状态的结构体。
+         * 这用作输入值传递给PID算法函数，该函数还返回一个反映算法建议的PID_State结构体。
          * 
-         * NOTE: The output field in this struct is set by the PID algorithm function, and
-         * is ignored in the actual calculations.
+         * 注意：此结构体中的output字段由PID算法函数设置，并在实际计算中被忽略。
          */
-        double actual; // The actual reading as measured
-        double target; // The desired reading
-        double time_delta; // Time since last sample/calculation - should be set when updating state
-        // The previously calculated error between actual and target (zero initially)
+        double actual; // 测量的实际值
+        double target; // 期望的值
+        double time_delta; // 自上次采样/计算以来的时间 - 在更新状态时应该设置
+        // 先前计算的实际与目标之间的误差（初始为零）
         double previous_error;
-        double integral; // Sum of integral error over time
-        double output; // the modified output value calculated by the algorithm, to compensate for error
+        double integral; // 随时间的积分误差总和
+        double output; // 由算法计算的修改后的输出值，用于补偿误差
     } PID_State;
 
-
     /*
-     * PID Controller Algorithm implementation
+     * PID控制器算法实现
      * 
-     * Given a PID calibration for the P, I and D values and a PID_State for the current
-     * state of the PID controller, calculate the new state for the PID Controller and set
-     * the output state to compensate for any error as defined by the algorithm
+     * 给定P、I和D值的PID校准以及当前PID控制器状态的PID_State，
+     * 计算PID控制器的新状态，并设置输出状态以补偿算法定义的任何误差
      */
     PID_State pid_iterate(PID_Calibration calibration, PID_State state);
-
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-// end of header
+// 头文件结束
 #endif

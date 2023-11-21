@@ -12,18 +12,18 @@
 
 
 PID_State pid_iterate(PID_Calibration calibration, PID_State state) {
-    // calculate difference between desired and actual values (the error)
+    // 计算期望值与实际值之间的差异（误差）
     double error = state.target - state.actual;
-    // calculate and update integral
+    // 计算并更新积分项
     state.integral += (error * state.time_delta);
-    // calculate derivative
+    // 计算导数
     double derivative = (error - state.previous_error) / state.time_delta;
-    // calculate output value according to algorithm
+    // 根据算法计算输出值
     state.output = (
         (calibration.kp * error) + (calibration.ki * state.integral) + (calibration.kd * derivative)
     );
-    // update state.previous_error to the error value calculated on this iteration
+    // 将 state.previous_error 更新为此迭代中计算的误差值
     state.previous_error = error;
-    // return the state struct reflecting the calculations
+    // 返回反映计算结果的 state 结构体
     return state;
 }
