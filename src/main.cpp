@@ -35,7 +35,7 @@ const int R2_encoderPin = 21;
 // 各电机的占空比
 const short ps_Min = 0;
 const short ps_Max = 255;
-double Car_ps = 100;
+double Car_ps = 50;
 double L1_ps = Car_ps;
 double R1_ps = Car_ps;
 double L2_ps = Car_ps;
@@ -85,33 +85,30 @@ bool allstop_Status = false;
 
 double PID_output(short encoderPos_Max, double middle_encoderPos, double new_encoderPos)
 {
-  // PID_data.kp = 255.0 / encoderPos_Max;
-  // PID_data.ki = 0;
-  // PID_data.kd = 0;
+  PID_data.kp = 255.0 / encoderPos_Max;
+  PID_data.ki = 0;
+  PID_data.kd = 0;
 
-  // PID_status.actual = new_encoderPos;
-  // PID_status.target = middle_encoderPos;
-  // PID_status.time_delta = 0.3; 
+  PID_status.actual = new_encoderPos;
+  PID_status.target = middle_encoderPos;
+  PID_status.time_delta = 0.3;
 
-  // pid_iterate(PID_data, PID_status);
-  // return PID_status.output;
+  pid_iterate(PID_data, PID_status);
 
-  double PID_out = 255.0 / encoderPos_Max * (middle_encoderPos - new_encoderPos) + 0.3 * (middle_encoderPos - new_encoderPos);
-
-  return PID_out;
-}
-
-double Judge_data(double data)
-{
-  if (data >= ps_Max)
+  if (PID_status.output >= ps_Max)
   {
-    data = ps_Max;
+    PID_status.output = ps_Max;
   }
-  else if (data <= ps_Min)
+  else if (PID_status.output <= ps_Min)
   {
-    data = ps_Min;
+    PID_status.output = ps_Min;
   }
-  return data;
+
+  return PID_status.output;
+
+  // double PID_out = 255.0 / encoderPos_Max * (middle_encoderPos - new_encoderPos) + 0.3 * (middle_encoderPos - new_encoderPos);
+
+  // return PID_out;
 }
 
 // 比较函数，用于在 qsort 中比较两个元素
@@ -137,11 +134,6 @@ void PIDTask(void *pvParameters)
     R1_ps = R1_ps + PID_output(R1_Max, middle_speed, R1_speed);
     L2_ps = L2_ps + PID_output(L2_Max, middle_speed, L2_speed);
     R2_ps = R2_ps + PID_output(R2_Max, middle_speed, R2_speed);
-
-    L1_ps = Judge_data(L1_ps);
-    R1_ps = Judge_data(R1_ps);
-    L2_ps = Judge_data(L2_ps);
-    R2_ps = Judge_data(R2_ps);
 
     Serial.print(L1_ps);
     Serial.print(" ");
