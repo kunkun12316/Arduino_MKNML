@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-#include <Arduino_FreeRTOS.h>
-#include "pid.h"
+#include <Arduino_FreeRTOS.h> //FreeRTOS微型控制系统
+#include "pid.h"              //使用PID算法更改小车运动轨迹
 
 pid_calibration PID_data = {
     .kp = 0, // Proportional gain
@@ -41,11 +41,13 @@ double R1_ps = Car_ps;
 double L2_ps = Car_ps;
 double R2_ps = Car_ps;
 
+// 每个电机在255的占空比下1秒的最高脉冲数
 const short L1_Max = 7000;
 const short R1_Max = 7280;
 const short L2_Max = 7015;
 const short R2_Max = 7100;
 
+// 记录每个电机的脉冲数
 volatile double L1_encoderPos = 0;
 volatile double L1_last_encoderPos = 0;
 volatile double R1_encoderPos = 0;
@@ -82,6 +84,14 @@ bool L2_backward_Status = false;
 bool R2_forward_Status = false;
 bool R2_backward_Status = false;
 bool allstop_Status = false;
+
+// 自动运行与蓝牙之间的互锁
+bool BT_move_Status = true; // 控制任务执行的标志
+
+// 在启用蓝牙时，数据储存的变量
+char BT_SerialData[64];
+volatile size_t BT_SerialData_num = 0;
+volatile double result = 0;
 
 double PID_output(short encoderPos_Max, double middle_encoderPos, double new_encoderPos)
 {
@@ -234,7 +244,7 @@ void motor_Task(void *pvParameters)
       analogWrite(R2_IN2, R2_ps);
     }
 
-    if (allstop_Status)
+    if (allstop_Status) // 编号:s
     {
       digitalWrite(L1_IN1, LOW);
       digitalWrite(L1_IN2, LOW);
@@ -263,103 +273,303 @@ void moveTask(void *pvParameters)
 {
   while (1)
   {
-    //  if(Serial.available()){
-    //     Serial_data = Serial.read();
-    //  }
+    if (BT_move_Status)
+    {
+      Serial.println("前进"); // 编号:w
+      allstop_Status = false;
+      L1_forward_Status = true;
+      R1_forward_Status = true;
+      L2_forward_Status = true;
+      R2_forward_Status = true;
+      vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
+      allstop_Status = true;
+      vTaskDelay(pdMS_TO_TICKS(1000));
 
-    Serial.println("前进");
-    /*前进*/
-    allstop_Status = false;
-    L1_forward_Status = true;
-    R1_forward_Status = true;
-    L2_forward_Status = true;
-    R2_forward_Status = true;
-    vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
-    allstop_Status = true;
-    vTaskDelay(pdMS_TO_TICKS(1000));
+      Serial.println("后退"); // 编号:x
+      allstop_Status = false;
+      L1_backward_Status = true;
+      R1_backward_Status = true;
+      L2_backward_Status = true;
+      R2_backward_Status = true;
+      vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
+      allstop_Status = true;
+      vTaskDelay(pdMS_TO_TICKS(1000));
 
-    Serial.println("后退");
-    /*后退*/
-    allstop_Status = false;
-    L1_backward_Status = true;
-    R1_backward_Status = true;
-    L2_backward_Status = true;
-    R2_backward_Status = true;
-    vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
-    allstop_Status = true;
-    vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:v
+      // Serial.println("顺时针原地旋转");
+      // allstop_Status = false;
+      // L1_forward_Status = true;
+      // R1_backward_Status = true;
+      // L2_forward_Status = true;
+      // R2_backward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("顺时针原地旋转");
-    // /*顺时针原地旋转*/
-    // L1_forward(L1_ps);
-    // R1_backward(R1_ps);
-    // L2_forward(L2_ps);
-    // R2_backward(R2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:b
+      // Serial.println("逆时针原地旋转");
+      // allstop_Status = false;
+      // L1_backward_Status = true;
+      // R1_forward_Status = true;
+      // L2_backward_Status = true;
+      // R2_forward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("逆时针原地旋转");
-    // /*逆时针原地旋转*/
-    // L1_backward(L1_ps);
-    // R1_forward(R1_ps);
-    // L2_backward(L2_ps);
-    // R2_forward(R2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:a
+      // Serial.println("左边平移");
+      // allstop_Status = false;
+      // L1_backward_Status = true;
+      // R1_forward_Status = true;
+      // L2_forward_Status = true;
+      // R2_backward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("左边平移");
-    // /*左边平移*/
-    // L1_backward(L1_ps);
-    // R1_forward(R1_ps);
-    // L2_forward(L2_ps);
-    // R2_backward(R2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:f
+      // Serial.println("右边平移");
+      // allstop_Status = false;
+      // L1_forward_Status = true;
+      // R1_backward_Status = true;
+      // L2_backward_Status = true;
+      // R2_forward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("右边平移");
-    // /*右边平移*/
-    // L1_forward(L1_ps);
-    // R1_backward(R1_ps);
-    // L2_backward(L2_ps);
-    // R2_forward(R2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:q
+      // Serial.println("斜向左上方");
+      // allstop_Status = false;
+      // R1_forward_Status = true;
+      // L2_forward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("斜向左上方");
-    // /*斜向左上方*/
-    // R1_forward(R1_ps);
-    // L2_forward(L2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:e
+      // Serial.println("斜向右上方");
+      // allstop_Status = false;
+      // L1_forward_Status = true;
+      // R2_forward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("斜向右上方");
-    // /*斜向右上方*/
-    // L1_forward(L1_ps);
-    // R2_forward(R2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:z
+      // Serial.println("斜向左下方");
+      // allstop_Status = false;
+      // L1_backward_Status = true;
+      // R2_backward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Serial.println("斜向左下方");
-    // /*斜向左下方*/
-    // L1_backward(L1_ps);
-    // R2_backward(R2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+      // 编号:c
+      // Serial.println("斜向右下方");
+      // allstop_Status = false;
+      // R1_backward_Status = true;
+      // L2_backward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+}
 
-    // Serial.println("斜向右下方");
-    // /*斜向右下方*/
-    // R1_backward(R1_ps);
-    // L2_backward(L2_ps);
-    // vTaskDelay(pdMS_TO_TICKS(3000));  // 挂起任务3秒
-    // allstop();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
+void BTserver_move(char *data, size_t num)
+{
+  char firstChar = data[0];
+  if (!BT_move_Status)
+  {
+    switch (firstChar)
+    {
+    case 'w':
+      Serial.println("前进"); // 编号:q
+      allstop_Status = false;
+      L1_forward_Status = true;
+      R1_forward_Status = true;
+      L2_forward_Status = true;
+      R2_forward_Status = true;
+      break;
+
+    case 'x':
+      Serial.println("后退"); // 编号:s
+      allstop_Status = false;
+      L1_backward_Status = true;
+      R1_backward_Status = true;
+      L2_backward_Status = true;
+      R2_backward_Status = true;
+      break;
+
+    case 'a':
+      Serial.println("左边平移");
+      allstop_Status = false;
+      L1_backward_Status = true;
+      R1_forward_Status = true;
+      L2_forward_Status = true;
+      R2_backward_Status = true;
+      break;
+
+    case 'f':
+      Serial.println("右边平移");
+      allstop_Status = false;
+      L1_forward_Status = true;
+      R1_backward_Status = true;
+      L2_backward_Status = true;
+      R2_forward_Status = true;
+      break;
+
+    case 'q':
+      Serial.println("斜向左上方");
+      allstop_Status = false;
+      R1_forward_Status = true;
+      L2_forward_Status = true;
+      break;
+
+    case 'e':
+      Serial.println("斜向右上方");
+      allstop_Status = false;
+      L1_forward_Status = true;
+      R2_forward_Status = true;
+      break;
+
+    case 'z':
+      Serial.println("斜向左下方");
+      allstop_Status = false;
+      L1_backward_Status = true;
+      R2_backward_Status = true;
+      break;
+
+    case 'c':
+      Serial.println("斜向右下方");
+      allstop_Status = false;
+      R1_backward_Status = true;
+      L2_backward_Status = true;
+      break;
+
+    case 'v':
+      Serial.println("顺时针原地旋转");
+      allstop_Status = false;
+      L1_forward_Status = true;
+      R1_backward_Status = true;
+      L2_forward_Status = true;
+      R2_backward_Status = true;
+      break;
+
+    case 'b':
+      Serial.println("逆时针原地旋转");
+      allstop_Status = false;
+      L1_backward_Status = true;
+      R1_forward_Status = true;
+      L2_backward_Status = true;
+      R2_forward_Status = true;
+      break;
+
+    default:
+      break;
+    }
+  }
+  switch (firstChar)
+  {
+  case 'r':
+    BT_move_Status = true;
+    break;
+  case 't':
+    BT_move_Status = false;
+    break;
+  case 'p':
+    for (size_t i = 1; i < num; i++)
+    {
+      char currentChar = data[i];
+
+      // 检查当前字符是否是数字
+      if (isdigit(currentChar))
+      {
+        // 将字符转换为数字
+        int digit = currentChar - '0';
+
+        // 合并数字
+        result = result * 10 + digit;
+      }
+      else
+      {
+        break;
+      }
+    }
+    PID_data.kp = result;
+    break;
+  case 'i':
+    for (size_t i = 1; i < num; i++)
+    {
+      char currentChar = data[i];
+
+      // 检查当前字符是否是数字
+      if (isdigit(currentChar))
+      {
+        // 将字符转换为数字
+        int digit = currentChar - '0';
+
+        // 合并数字
+        result = result * 10 + digit;
+      }
+      else
+      {
+        break;
+      }
+    }
+    PID_data.ki = result;
+    break;
+
+  case 'd':
+    for (size_t i = 1; i < num; i++)
+    {
+      char currentChar = data[i];
+
+      // 检查当前字符是否是数字
+      if (isdigit(currentChar))
+      {
+        // 将字符转换为数字
+        int digit = currentChar - '0';
+
+        // 合并数字
+        result = result * 10 + digit;
+      }
+      else
+      {
+        break;
+      }
+    }
+    PID_data.kd = result;
+    break;
+
+  default:
+    break;
+  }
+}
+
+void BTserver_Task(void *pvParameters)
+{
+  while (1)
+  {
+    // 将用户通过串口监视器输入的数据发送给HC-06
+    if (Serial1.available() > 0)
+    { // 如果硬件串口缓存中有等待传输的数据
+      // 将传入数据读取到字符数组中
+
+      Serial1.readBytesUntil('\n', BT_SerialData, sizeof(BT_SerialData) - 1);
+      BT_SerialData[sizeof(BT_SerialData) - 1] = '\0'; // 用空字符终止字符串,使之成为有效的C字符串
+
+      BT_SerialData_num = strlen(BT_SerialData);
+
+      // 打印接收到的字符串
+      Serial1.print("Received data: ");
+      Serial1.println(BT_SerialData);
+
+      BTserver_move(BT_SerialData, BT_SerialData_num);
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
 
@@ -467,6 +677,7 @@ void setup()
   xTaskCreate(PIDTask, "通过PID+编码器检测速度", 1000, NULL, 2, NULL);
   // xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 3, NULL);
   xTaskCreate(moveTask, "电机动作", 1000, NULL, 1, NULL);
+  xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 3, NULL);
   xTaskCreate(motor_Task, "改变电机状态", 1000, NULL, 3, NULL);
 
   attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
@@ -475,6 +686,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(R2_encoderPin), R2_doEncoder, CHANGE);
 
   Serial.begin(115200);
+  Serial1.begin(115200);
 
   pinMode(L1_encoderPin, INPUT);
   pinMode(R1_encoderPin, INPUT);
