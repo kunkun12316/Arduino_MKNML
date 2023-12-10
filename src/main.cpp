@@ -96,8 +96,6 @@ volatile double result = 0;
 double PID_output(short encoderPos_Max, double middle_encoderPos, double new_encoderPos)
 {
   PID_data.kp = 255.0 / encoderPos_Max;
-  PID_data.ki = 0;
-  PID_data.kd = 0;
 
   PID_status.actual = new_encoderPos;
   PID_status.target = middle_encoderPos;
@@ -105,7 +103,7 @@ double PID_output(short encoderPos_Max, double middle_encoderPos, double new_enc
 
   pid_iterate(PID_data, PID_status);
 
-  if (PID_status.output >= ps_Max)
+  if (PID_status.output >= ps_Max) //速度不能超过最大值，低于最小值
   {
     PID_status.output = ps_Max;
   }
@@ -375,19 +373,20 @@ void moveTask(void *pvParameters)
       // allstop_Status = true;
       // vTaskDelay(pdMS_TO_TICKS(1000));
     }
+    vTaskDelay(pdMS_TO_TICKS(300));
   }
 }
 
-void BTserver_move(char *data, size_t num)
+void BTserver_move(char data, double num)
 {
-  char firstChar = data[0];
   if (!BT_move_Status)
   {
-    switch (firstChar)
+    switch (data)
     {
     case 'w':
-      Serial.println("前进"); // 编号:q
+      Serial2.println("前进"); // 编号:w
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_forward_Status = true;
       R1_forward_Status = true;
       L2_forward_Status = true;
@@ -395,8 +394,9 @@ void BTserver_move(char *data, size_t num)
       break;
 
     case 'x':
-      Serial.println("后退"); // 编号:s
+      Serial2.println("后退"); // 编号:x
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_backward_Status = true;
       R1_backward_Status = true;
       L2_backward_Status = true;
@@ -404,8 +404,9 @@ void BTserver_move(char *data, size_t num)
       break;
 
     case 'a':
-      Serial.println("左边平移");
+      Serial2.println("左边平移");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_backward_Status = true;
       R1_forward_Status = true;
       L2_forward_Status = true;
@@ -413,8 +414,9 @@ void BTserver_move(char *data, size_t num)
       break;
 
     case 'f':
-      Serial.println("右边平移");
+      Serial2.println("右边平移");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_forward_Status = true;
       R1_backward_Status = true;
       L2_backward_Status = true;
@@ -422,36 +424,41 @@ void BTserver_move(char *data, size_t num)
       break;
 
     case 'q':
-      Serial.println("斜向左上方");
+      Serial2.println("斜向左上方");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       R1_forward_Status = true;
       L2_forward_Status = true;
       break;
 
     case 'e':
-      Serial.println("斜向右上方");
+      Serial2.println("斜向右上方");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_forward_Status = true;
       R2_forward_Status = true;
       break;
 
     case 'z':
-      Serial.println("斜向左下方");
+      Serial2.println("斜向左下方");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_backward_Status = true;
       R2_backward_Status = true;
       break;
 
     case 'c':
-      Serial.println("斜向右下方");
+      Serial2.println("斜向右下方");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       R1_backward_Status = true;
       L2_backward_Status = true;
       break;
 
     case 'v':
-      Serial.println("顺时针原地旋转");
+      Serial2.println("顺时针原地旋转");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_forward_Status = true;
       R1_backward_Status = true;
       L2_forward_Status = true;
@@ -459,8 +466,9 @@ void BTserver_move(char *data, size_t num)
       break;
 
     case 'b':
-      Serial.println("逆时针原地旋转");
+      Serial2.println("逆时针原地旋转");
       allstop_Status = false;
+      vTaskDelay(pdMS_TO_TICKS(200));
       L1_backward_Status = true;
       R1_forward_Status = true;
       L2_backward_Status = true;
@@ -471,79 +479,89 @@ void BTserver_move(char *data, size_t num)
       break;
     }
   }
-  switch (firstChar)
+  switch (data)
   {
   case 'r':
     BT_move_Status = true;
+
+    digitalWrite(L1_IN1, LOW);
+    digitalWrite(L1_IN2, LOW);
+    digitalWrite(R1_IN1, LOW);
+    digitalWrite(R1_IN2, LOW);
+    digitalWrite(L2_IN1, LOW);
+    digitalWrite(L2_IN2, LOW);
+    digitalWrite(R2_IN1, LOW);
+    digitalWrite(R2_IN2, LOW);
+
+    L1_forward_Status = false;
+    L1_backward_Status = false;
+    R1_forward_Status = false;
+    R1_backward_Status = false;
+    L2_forward_Status = false;
+    L2_backward_Status = false;
+    R2_forward_Status = false;
+    R2_backward_Status = false;
+
+    Serial2.println("自动模式");
     break;
   case 't':
     BT_move_Status = false;
+
+    digitalWrite(L1_IN1, LOW);
+    digitalWrite(L1_IN2, LOW);
+    digitalWrite(R1_IN1, LOW);
+    digitalWrite(R1_IN2, LOW);
+    digitalWrite(L2_IN1, LOW);
+    digitalWrite(L2_IN2, LOW);
+    digitalWrite(R2_IN1, LOW);
+    digitalWrite(R2_IN2, LOW);
+
+    L1_forward_Status = false;
+    L1_backward_Status = false;
+    R1_forward_Status = false;
+    R1_backward_Status = false;
+    L2_forward_Status = false;
+    L2_backward_Status = false;
+    R2_forward_Status = false;
+    R2_backward_Status = false;
+    Serial2.println("蓝牙调试模式");
+    break;
+  case 's':
+    digitalWrite(L1_IN1, LOW);
+    digitalWrite(L1_IN2, LOW);
+    digitalWrite(R1_IN1, LOW);
+    digitalWrite(R1_IN2, LOW);
+    digitalWrite(L2_IN1, LOW);
+    digitalWrite(L2_IN2, LOW);
+    digitalWrite(R2_IN1, LOW);
+    digitalWrite(R2_IN2, LOW);
+
+    L1_forward_Status = false;
+    L1_backward_Status = false;
+    R1_forward_Status = false;
+    R1_backward_Status = false;
+    L2_forward_Status = false;
+    L2_backward_Status = false;
+    R2_forward_Status = false;
+    R2_backward_Status = false;
+    Serial2.println("电机停止");
     break;
   case 'p':
-    for (size_t i = 1; i < num; i++)
-    {
-      char currentChar = data[i];
-
-      // 检查当前字符是否是数字
-      if (isdigit(currentChar))
-      {
-        // 将字符转换为数字
-        int digit = currentChar - '0';
-
-        // 合并数字
-        result = result * 10 + digit;
-      }
-      else
-      {
-        break;
-      }
-    }
-    PID_data.kp = result;
+    PID_data.kp = num;
+    Serial2.print("P参数更改为：");
+    Serial2.println(PID_data.kp);
     break;
   case 'i':
-    for (size_t i = 1; i < num; i++)
-    {
-      char currentChar = data[i];
-
-      // 检查当前字符是否是数字
-      if (isdigit(currentChar))
-      {
-        // 将字符转换为数字
-        int digit = currentChar - '0';
-
-        // 合并数字
-        result = result * 10 + digit;
-      }
-      else
-      {
-        break;
-      }
-    }
-    PID_data.ki = result;
+    PID_data.ki = num;
+    Serial2.print("i参数更改为：");
+    Serial2.println(PID_data.kp);
     break;
 
   case 'd':
-    for (size_t i = 1; i < num; i++)
-    {
-      char currentChar = data[i];
-
-      // 检查当前字符是否是数字
-      if (isdigit(currentChar))
-      {
-        // 将字符转换为数字
-        int digit = currentChar - '0';
-
-        // 合并数字
-        result = result * 10 + digit;
-      }
-      else
-      {
-        break;
-      }
-    }
-    PID_data.kd = result;
+    PID_data.kd = num;
+    Serial2.print("d参数更改为：");
+    Serial2.println(PID_data.kp);
     break;
-
   default:
     break;
   }
@@ -554,22 +572,42 @@ void BTserver_Task(void *pvParameters)
   while (1)
   {
     // 将用户通过串口监视器输入的数据发送给HC-06
-    if (Serial1.available() > 0)
+    if (Serial2.available() > 0)
     { // 如果硬件串口缓存中有等待传输的数据
       // 将传入数据读取到字符数组中
+      int i = 0;
+      // 清空BT_data数组
+      memset(BT_SerialData, 0, sizeof(BT_SerialData));
 
-      Serial1.readBytesUntil('\n', BT_SerialData, sizeof(BT_SerialData) - 1);
-      BT_SerialData[sizeof(BT_SerialData) - 1] = '\0'; // 用空字符终止字符串,使之成为有效的C字符串
+      // 清空串口缓冲区
+      while (Serial2.available())
+      {
+        char c = Serial2.read();
+        BT_SerialData[i] = c;
+        i++;
+      }
 
-      BT_SerialData_num = strlen(BT_SerialData);
+      // 查找第一个数字的位置
+      char *ptr = BT_SerialData;
+      while (*ptr && !isdigit(*ptr))
+      {
+        ptr++;
+      }
+
+      // 将字符串的数字部分转换为浮点数
+      result = atof(ptr);
 
       // 打印接收到的字符串
-      Serial1.print("Received data: ");
-      Serial1.println(BT_SerialData);
+      Serial2.print("Received data: ");
+      Serial2.println(BT_SerialData);
 
-      BTserver_move(BT_SerialData, BT_SerialData_num);
+      // 输出转换后的浮点数
+      Serial2.print("转换后的浮点数: ");
+      Serial2.println(result, 2); // 保留2位小数
+
+      BTserver_move(BT_SerialData[0], result);
     }
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(300));
   }
 }
 
@@ -676,8 +714,8 @@ void setup()
 {
   xTaskCreate(PIDTask, "通过PID+编码器检测速度", 1000, NULL, 2, NULL);
   // xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 3, NULL);
-  xTaskCreate(moveTask, "电机动作", 1000, NULL, 1, NULL);
-  xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 3, NULL);
+  xTaskCreate(moveTask, "电机动作", 1000, NULL, 3, NULL);
+  xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 1, NULL);
   xTaskCreate(motor_Task, "改变电机状态", 1000, NULL, 3, NULL);
 
   attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
@@ -686,7 +724,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(R2_encoderPin), R2_doEncoder, CHANGE);
 
   Serial.begin(115200);
-  Serial1.begin(115200);
+  Serial2.begin(115200);
 
   pinMode(L1_encoderPin, INPUT);
   pinMode(R1_encoderPin, INPUT);
