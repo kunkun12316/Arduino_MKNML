@@ -103,14 +103,7 @@ double PID_output(short encoderPos_Max, double middle_encoderPos, double new_enc
 
   pid_iterate(PID_data, PID_status);
 
-  if (PID_status.output >= ps_Max) //速度不能超过最大值，低于最小值
-  {
-    PID_status.output = ps_Max;
-  }
-  else if (PID_status.output <= ps_Min)
-  {
-    PID_status.output = ps_Min;
-  }
+  PID_status.output = map(PID_status.output, ps_Min, ps_Max, 0, 255);
 
   return PID_status.output;
 
@@ -263,7 +256,7 @@ void motor_Task(void *pvParameters)
       R2_backward_Status = false;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
@@ -381,12 +374,14 @@ void BTserver_move(char data, double num)
 {
   if (!BT_move_Status)
   {
+    allstop_Status = true;
+    vTaskDelay(pdMS_TO_TICKS(200));
     switch (data)
     {
     case 'w':
       Serial2.println("前进"); // 编号:w
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_forward_Status = true;
       R1_forward_Status = true;
       L2_forward_Status = true;
@@ -396,7 +391,7 @@ void BTserver_move(char data, double num)
     case 'x':
       Serial2.println("后退"); // 编号:x
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_backward_Status = true;
       R1_backward_Status = true;
       L2_backward_Status = true;
@@ -406,7 +401,7 @@ void BTserver_move(char data, double num)
     case 'a':
       Serial2.println("左边平移");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_backward_Status = true;
       R1_forward_Status = true;
       L2_forward_Status = true;
@@ -416,7 +411,7 @@ void BTserver_move(char data, double num)
     case 'f':
       Serial2.println("右边平移");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_forward_Status = true;
       R1_backward_Status = true;
       L2_backward_Status = true;
@@ -426,7 +421,7 @@ void BTserver_move(char data, double num)
     case 'q':
       Serial2.println("斜向左上方");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       R1_forward_Status = true;
       L2_forward_Status = true;
       break;
@@ -434,7 +429,7 @@ void BTserver_move(char data, double num)
     case 'e':
       Serial2.println("斜向右上方");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_forward_Status = true;
       R2_forward_Status = true;
       break;
@@ -442,7 +437,7 @@ void BTserver_move(char data, double num)
     case 'z':
       Serial2.println("斜向左下方");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_backward_Status = true;
       R2_backward_Status = true;
       break;
@@ -458,7 +453,7 @@ void BTserver_move(char data, double num)
     case 'v':
       Serial2.println("顺时针原地旋转");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_forward_Status = true;
       R1_backward_Status = true;
       L2_forward_Status = true;
@@ -468,7 +463,7 @@ void BTserver_move(char data, double num)
     case 'b':
       Serial2.println("逆时针原地旋转");
       allstop_Status = false;
-      vTaskDelay(pdMS_TO_TICKS(200));
+      vTaskDelay(pdMS_TO_TICKS(20));
       L1_backward_Status = true;
       R1_forward_Status = true;
       L2_backward_Status = true;
@@ -712,10 +707,10 @@ void R2_doEncoder()
 
 void setup()
 {
-  xTaskCreate(PIDTask, "通过PID+编码器检测速度", 1000, NULL, 2, NULL);
+  xTaskCreate(PIDTask, "通过PID+编码器检测速度", 1000, NULL, 1, NULL);
   // xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 3, NULL);
   xTaskCreate(moveTask, "电机动作", 1000, NULL, 3, NULL);
-  xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 1, NULL);
+  xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 2, NULL);
   xTaskCreate(motor_Task, "改变电机状态", 1000, NULL, 3, NULL);
 
   attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
