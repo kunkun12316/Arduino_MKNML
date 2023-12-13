@@ -13,7 +13,7 @@ pid_state PID_status = {
     .actual = 0,         // 测量的实际值
     .target = 0,         // 期望的值
     .time_delta = 0,     // 更新状态时应设置自上次采样/计算以来的时间
-    .previous_error = 0, // 先前计算的实际与目标之间的误差(初始为零)
+    .previous_error = 0.01, // 先前计算的实际与目标之间的误差(初始为零)
     .integral = 0,       // 积分误差随时间的总和
     .output = 0          // 修正后的输出值由算法计算，对误差进行补偿
 };
@@ -35,17 +35,17 @@ const int R2_encoderPin = 21;
 // 各电机的占空比
 const short ps_Min = 0;
 const short ps_Max = 255;
-double Car_ps = 50;
-double L1_ps = Car_ps;
-double R1_ps = Car_ps;
-double L2_ps = Car_ps;
-double R2_ps = Car_ps;
+double Car_ps = 30.0;
+double L1_sp = Car_ps;
+double R1_sp = Car_ps;
+double L2_sp = Car_ps;
+double R2_sp = Car_ps;
 
 // 每个电机在255的占空比下1秒的最高脉冲数
-const short L1_Max = 7000;
-const short R1_Max = 7280;
-const short L2_Max = 7015;
-const short R2_Max = 7100;
+const double L1_Max = 7000.0;
+const double R1_Max = 7280.0;
+const double L2_Max = 7015.0;
+const double R2_Max = 7100.0;
 
 // 记录每个电机的脉冲数
 volatile double L1_encoderPos = 0;
@@ -63,7 +63,7 @@ double middle_speed = 0;
 // 当前时间，上一次时间，存储速度
 unsigned long L1_now_Time = 0;
 unsigned long L1_last_time = 0;
-double L1_speed = 0;
+double L1_speed = 0; //电机一秒内的转速
 unsigned long R1_now_Time = 0;
 unsigned long R1_last_time = 0;
 double R1_speed = 0;
@@ -90,20 +90,21 @@ bool BT_move_Status = true; // 控制任务执行的标志
 
 // 在启用蓝牙时，数据储存的变量
 char BT_SerialData[64];
-volatile size_t BT_SerialData_num = 0;
 volatile double result = 0;
 
-double PID_output(short encoderPos_Max, double middle_encoderPos, double new_encoderPos)
+double PID_output(double sp,double encoderPos_Max, double middle_encoderPos, double new_encoderPos)
 {
-  PID_data.kp = 255.0 / encoderPos_Max;
+  PID_data.kp = (255.0 / encoderPos_Max)*(sp/255.0);
 
   PID_status.actual = new_encoderPos;
   PID_status.target = middle_encoderPos;
   PID_status.time_delta = 0.3;
 
-  pid_iterate(PID_data, PID_status);
+  PID_status = pid_iterate(PID_data, PID_status);
 
-  PID_status.output = map(PID_status.output, ps_Min, ps_Max, 0, 255);
+  Serial.print("PID_status.output: ");Serial.println(PID_status.output);
+
+  PID_status.output = map(PID_status.output, ps_Min, ps_Max, ps_Min, ps_Max);
 
   return PID_status.output;
 
@@ -131,18 +132,18 @@ void PIDTask(void *pvParameters)
     // 中间速度是排序后数组的第三个元素
     middle_speed = speeds[2];
 
-    L1_ps = L1_ps + PID_output(L1_Max, middle_speed, L1_speed);
-    R1_ps = R1_ps + PID_output(R1_Max, middle_speed, R1_speed);
-    L2_ps = L2_ps + PID_output(L2_Max, middle_speed, L2_speed);
-    R2_ps = R2_ps + PID_output(R2_Max, middle_speed, R2_speed);
+    L1_sp = L1_sp + PID_output(L1_sp, L1_Max, middle_speed, L1_speed);
+    R1_sp = R1_sp + PID_output(R1_sp, R1_Max, middle_speed, R1_speed);
+    L2_sp = L2_sp + PID_output(L2_sp, L2_Max, middle_speed, L2_speed);
+    R2_sp = R2_sp + PID_output(R2_sp, R2_Max, middle_speed, R2_speed);
 
-    Serial.print(L1_ps);
+    Serial.print(L1_sp);
     Serial.print(" ");
-    Serial.print(R1_ps);
+    Serial.print(R1_sp);
     Serial.print(" ");
-    Serial.print(L2_ps);
+    Serial.print(L2_sp);
     Serial.print(" ");
-    Serial.println(R2_ps);
+    Serial.println(R2_sp);
 
     Serial.print(L1_speed);
     Serial.print(" ");
@@ -151,6 +152,8 @@ void PIDTask(void *pvParameters)
     Serial.print(L2_speed);
     Serial.print(" ");
     Serial.println(R2_speed);
+
+    Serial.println();
 
     vTaskDelay(pdMS_TO_TICKS(300));
   }
@@ -168,13 +171,13 @@ void PIDTask(void *pvParameters)
 //       // Serial.print(" ");
 //       // Serial.println(R2_speed);
 
-//       // Serial.print(L1_ps);
+//       // Serial.print(L1_sp);
 //       // Serial.print(" ");
-//       // Serial.print(R1_ps);
+//       // Serial.print(R1_sp);
 //       // Serial.print(" ");
-//       // Serial.print(L2_ps);
+//       // Serial.print(L2_sp);
 //       // Serial.print(" ");
-//       // Serial.println(R2_ps);
+//       // Serial.println(R2_sp);
 //       vTaskDelay(pdMS_TO_TICKS(50));
 //     }
 // }
@@ -186,7 +189,7 @@ void motor_Task(void *pvParameters)
     if (L1_forward_Status)
     {
       // 左前轮前进
-      analogWrite(L1_IN1, L1_ps);
+      analogWrite(L1_IN1, L1_sp);
       digitalWrite(L1_IN2, LOW);
     }
 
@@ -194,25 +197,25 @@ void motor_Task(void *pvParameters)
     {
       // 左前轮后退
       digitalWrite(L1_IN1, LOW);
-      analogWrite(L1_IN2, L1_ps);
+      analogWrite(L1_IN2, L1_sp);
     }
 
     if (R1_forward_Status)
     {
       // 右前轮前进
-      analogWrite(R1_IN1, R1_ps);
+      analogWrite(R1_IN1, R1_sp);
       digitalWrite(R1_IN2, LOW);
     }
 
     if (R1_backward_Status)
     {
       digitalWrite(R1_IN1, LOW);
-      analogWrite(R1_IN2, R1_ps);
+      analogWrite(R1_IN2, R1_sp);
     }
 
     if (L2_forward_Status)
     { // 左后轮前进
-      analogWrite(L2_IN1, L2_ps);
+      analogWrite(L2_IN1, L2_sp);
       digitalWrite(L2_IN2, LOW);
     }
 
@@ -220,19 +223,19 @@ void motor_Task(void *pvParameters)
     {
       // 左后轮后退
       digitalWrite(L2_IN1, LOW);
-      analogWrite(L2_IN2, L2_ps);
+      analogWrite(L2_IN2, L2_sp);
     }
 
     if (R2_forward_Status)
     { // 右后轮前进
-      analogWrite(R2_IN1, R2_ps);
+      analogWrite(R2_IN1, R2_sp);
       digitalWrite(R2_IN2, LOW);
     }
 
     if (R2_backward_Status)
     { // 右后轮后退
       digitalWrite(R2_IN1, LOW);
-      analogWrite(R2_IN2, R2_ps);
+      analogWrite(R2_IN2, R2_sp);
     }
 
     if (allstop_Status) // 编号:s
@@ -256,7 +259,7 @@ void motor_Task(void *pvParameters)
       R2_backward_Status = false;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -375,7 +378,7 @@ void BTserver_move(char data, double num)
   if (!BT_move_Status)
   {
     allstop_Status = true;
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(100));
     switch (data)
     {
     case 'w':
@@ -478,47 +481,10 @@ void BTserver_move(char data, double num)
   {
   case 'r':
     BT_move_Status = true;
-
-    digitalWrite(L1_IN1, LOW);
-    digitalWrite(L1_IN2, LOW);
-    digitalWrite(R1_IN1, LOW);
-    digitalWrite(R1_IN2, LOW);
-    digitalWrite(L2_IN1, LOW);
-    digitalWrite(L2_IN2, LOW);
-    digitalWrite(R2_IN1, LOW);
-    digitalWrite(R2_IN2, LOW);
-
-    L1_forward_Status = false;
-    L1_backward_Status = false;
-    R1_forward_Status = false;
-    R1_backward_Status = false;
-    L2_forward_Status = false;
-    L2_backward_Status = false;
-    R2_forward_Status = false;
-    R2_backward_Status = false;
-
     Serial2.println("自动模式");
     break;
   case 't':
     BT_move_Status = false;
-
-    digitalWrite(L1_IN1, LOW);
-    digitalWrite(L1_IN2, LOW);
-    digitalWrite(R1_IN1, LOW);
-    digitalWrite(R1_IN2, LOW);
-    digitalWrite(L2_IN1, LOW);
-    digitalWrite(L2_IN2, LOW);
-    digitalWrite(R2_IN1, LOW);
-    digitalWrite(R2_IN2, LOW);
-
-    L1_forward_Status = false;
-    L1_backward_Status = false;
-    R1_forward_Status = false;
-    R1_backward_Status = false;
-    L2_forward_Status = false;
-    L2_backward_Status = false;
-    R2_forward_Status = false;
-    R2_backward_Status = false;
     Serial2.println("蓝牙调试模式");
     break;
   case 's':
@@ -610,7 +576,7 @@ void L1_doEncoder()
 {
   // 计算速度
   L1_now_Time = millis();
-  if (L1_now_Time - L1_last_time >= 500) // 每秒计算一次速度
+  if (L1_now_Time - L1_last_time >= 1000) // 每秒计算一次速度
   {
     L1_speed = (float)(L1_encoderPos - L1_last_encoderPos) / (float)(L1_now_Time - L1_last_time) * 1000.0;
     // Serial.print("Speed: ");
@@ -635,7 +601,7 @@ void R1_doEncoder()
 {
   // 计算速度
   R1_now_Time = millis();
-  if (R1_now_Time - R1_last_time >= 500) // 每秒计算一次速度
+  if (R1_now_Time - R1_last_time >= 1000) // 每秒计算一次速度
   {
     R1_speed = (float)(R1_encoderPos - R1_last_encoderPos) / (float)(R1_now_Time - R1_last_time) * 1000.0;
     // Serial.print("Speed: ");
@@ -659,7 +625,7 @@ void L2_doEncoder()
 {
   // 计算速度
   L2_now_Time = millis();
-  if (L2_now_Time - L2_last_time >= 500) // 每秒计算一次速度
+  if (L2_now_Time - L2_last_time >= 1000) // 每秒计算一次速度
   {
     L2_speed = (float)(L2_encoderPos - L2_last_encoderPos) / (float)(L2_now_Time - L2_last_time) * 1000.0;
     // Serial.print("Speed: ");
@@ -684,7 +650,7 @@ void R2_doEncoder()
 {
   // 计算速度
   R2_now_Time = millis();
-  if (R2_now_Time - R2_last_time >= 500) // 每秒计算一次速度
+  if (R2_now_Time - R2_last_time >= 1000) // 每秒计算一次速度
   {
     R2_speed = (float)(R2_encoderPos - R2_last_encoderPos) / (float)(R2_now_Time - R2_last_time) * 1000.0;
     // Serial.print("Speed: ");
@@ -711,7 +677,7 @@ void setup()
   // xTaskCreate(testTask, "通过编码器检测速度", 1000, NULL, 3, NULL);
   xTaskCreate(moveTask, "电机动作", 1000, NULL, 3, NULL);
   xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 2, NULL);
-  xTaskCreate(motor_Task, "改变电机状态", 1000, NULL, 3, NULL);
+  xTaskCreate(motor_Task, "通过改变电机状态，使相应电机动作", 1000, NULL, 3, NULL);
 
   attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
   attachInterrupt(digitalPinToInterrupt(R1_encoderPin), R1_doEncoder, CHANGE);
