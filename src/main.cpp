@@ -4,18 +4,18 @@
 #include "pid.h"              //使用PID算法更改小车运动轨迹
 
 pid_calibration PID_data = {
-    .kp = 0, // Proportional gain
-    .ki = 0, // Integral gain
+    .kp = 0,    // Proportional gain
+    .ki = 0.01, // Integral gain
     .kd = 0  // Derivative gain
 };
 
 pid_state PID_status = {
-    .actual = 0,         // 测量的实际值
-    .target = 0,         // 期望的值
-    .time_delta = 0,     // 更新状态时应设置自上次采样/计算以来的时间
+    .actual = 0,            // 测量的实际值
+    .target = 0,            // 期望的值
+    .time_delta = 0,        // 更新状态时应设置自上次采样/计算以来的时间
     .previous_error = 0.01, // 先前计算的实际与目标之间的误差(初始为零)
-    .integral = 0,       // 积分误差随时间的总和
-    .output = 0          // 修正后的输出值由算法计算，对误差进行补偿
+    .integral = 0,          // 积分误差随时间的总和
+    .output = 0             // 修正后的输出值由算法计算，对误差进行补偿
 };
 
 // 定义电机控制引脚
@@ -63,7 +63,7 @@ double middle_speed = 0;
 // 当前时间，上一次时间，存储速度
 unsigned long L1_now_Time = 0;
 unsigned long L1_last_time = 0;
-double L1_speed = 0; //电机一秒内的转速
+double L1_speed = 0; // 电机一秒内的转速
 unsigned long R1_now_Time = 0;
 unsigned long R1_last_time = 0;
 double R1_speed = 0;
@@ -83,7 +83,7 @@ bool L2_forward_Status = false;
 bool L2_backward_Status = false;
 bool R2_forward_Status = false;
 bool R2_backward_Status = false;
-bool allstop_Status = false;
+bool allstop_Status = true;
 
 // 自动运行与蓝牙之间的互锁
 bool BT_move_Status = true; // 控制任务执行的标志
@@ -91,10 +91,16 @@ bool BT_move_Status = true; // 控制任务执行的标志
 // 在启用蓝牙时，数据储存的变量
 char BT_SerialData[64];
 volatile double result = 0;
+bool Serial2_status = true;
+bool last_Serial2_status = Serial2_status;
 
-double PID_output(double sp,double encoderPos_Max, double middle_encoderPos, double new_encoderPos)
+// 如果电机停止，时间变量定义
+unsigned long stop_now_time = 0;
+unsigned long stop_last_time = 0;
+
+double PID_output(double sp, double encoderPos_Max, double middle_encoderPos, double new_encoderPos)
 {
-  PID_data.kp = (255.0 / encoderPos_Max)*(sp/255.0);
+  PID_data.kp = (255.0 / encoderPos_Max) * (sp / 255.0);
 
   PID_status.actual = new_encoderPos;
   PID_status.target = middle_encoderPos;
@@ -102,9 +108,17 @@ double PID_output(double sp,double encoderPos_Max, double middle_encoderPos, dou
 
   PID_status = pid_iterate(PID_data, PID_status);
 
-  Serial.print("PID_status.output: ");Serial.println(PID_status.output);
+  if (PID_status.output < (0 - sp))
+  {
+    PID_status.output = -sp;
+  }
+  else if (PID_status.output > (255 - sp))
+  {
+    PID_status.output = 255 - sp;
+  }
 
-  PID_status.output = map(PID_status.output, ps_Min, ps_Max, ps_Min, ps_Max);
+  Serial.print("PID_status.output: ");
+  Serial.println(PID_status.output);
 
   return PID_status.output;
 
@@ -123,37 +137,40 @@ void PIDTask(void *pvParameters)
 {
   while (1)
   {
-    double speeds[] = {L1_speed, R1_speed, L2_speed, R2_speed};
-    double size = sizeof(speeds) / sizeof(speeds[0]);
+    // if (Serial2_status)
+    // {
+      double speeds[] = {L1_speed, R1_speed, L2_speed, R2_speed};
+      double size = sizeof(speeds) / sizeof(speeds[0]);
 
-    // 使用 qsort 函数进行升序排序
-    qsort(speeds, size, sizeof(speeds[0]), compare);
+      // 使用 qsort 函数进行升序排序
+      qsort(speeds, size, sizeof(speeds[0]), compare);
 
-    // 中间速度是排序后数组的第三个元素
-    middle_speed = speeds[2];
+      // 中间速度是排序后数组的第三个元素
+      middle_speed = speeds[2];
 
-    L1_sp = L1_sp + PID_output(L1_sp, L1_Max, middle_speed, L1_speed);
-    R1_sp = R1_sp + PID_output(R1_sp, R1_Max, middle_speed, R1_speed);
-    L2_sp = L2_sp + PID_output(L2_sp, L2_Max, middle_speed, L2_speed);
-    R2_sp = R2_sp + PID_output(R2_sp, R2_Max, middle_speed, R2_speed);
+      L1_sp = L1_sp + PID_output(L1_sp, L1_Max, middle_speed, L1_speed);
+      R1_sp = R1_sp + PID_output(R1_sp, R1_Max, middle_speed, R1_speed);
+      L2_sp = L2_sp + PID_output(L2_sp, L2_Max, middle_speed, L2_speed);
+      R2_sp = R2_sp + PID_output(R2_sp, R2_Max, middle_speed, R2_speed);
 
-    Serial.print(L1_sp);
-    Serial.print(" ");
-    Serial.print(R1_sp);
-    Serial.print(" ");
-    Serial.print(L2_sp);
-    Serial.print(" ");
-    Serial.println(R2_sp);
+      Serial.print(L1_sp);
+      Serial.print(" ");
+      Serial.print(R1_sp);
+      Serial.print(" ");
+      Serial.print(L2_sp);
+      Serial.print(" ");
+      Serial.println(R2_sp);
 
-    Serial.print(L1_speed);
-    Serial.print(" ");
-    Serial.print(R1_speed);
-    Serial.print(" ");
-    Serial.print(L2_speed);
-    Serial.print(" ");
-    Serial.println(R2_speed);
+      Serial.print(L1_speed);
+      Serial.print(" ");
+      Serial.print(R1_speed);
+      Serial.print(" ");
+      Serial.print(L2_speed);
+      Serial.print(" ");
+      Serial.println(R2_speed);
 
-    Serial.println();
+      Serial.println();
+    // }
 
     vTaskDelay(pdMS_TO_TICKS(300));
   }
@@ -276,18 +293,18 @@ void moveTask(void *pvParameters)
       L2_forward_Status = true;
       R2_forward_Status = true;
       vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
-      allstop_Status = true;
-      vTaskDelay(pdMS_TO_TICKS(1000));
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
-      Serial.println("后退"); // 编号:x
-      allstop_Status = false;
-      L1_backward_Status = true;
-      R1_backward_Status = true;
-      L2_backward_Status = true;
-      R2_backward_Status = true;
-      vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
-      allstop_Status = true;
-      vTaskDelay(pdMS_TO_TICKS(1000));
+      // Serial.println("后退"); // 编号:x
+      // allstop_Status = false;
+      // L1_backward_Status = true;
+      // R1_backward_Status = true;
+      // L2_backward_Status = true;
+      // R2_backward_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(5000)); // 挂起任务3秒
+      // allstop_Status = true;
+      // vTaskDelay(pdMS_TO_TICKS(1000));
 
       // 编号:v
       // Serial.println("顺时针原地旋转");
@@ -378,6 +395,7 @@ void BTserver_move(char data, double num)
   if (!BT_move_Status)
   {
     allstop_Status = true;
+    Serial2_status = true;
     vTaskDelay(pdMS_TO_TICKS(100));
     switch (data)
     {
@@ -488,6 +506,8 @@ void BTserver_move(char data, double num)
     Serial2.println("蓝牙调试模式");
     break;
   case 's':
+    BT_move_Status = false;
+
     digitalWrite(L1_IN1, LOW);
     digitalWrite(L1_IN2, LOW);
     digitalWrite(R1_IN1, LOW);
@@ -568,9 +588,37 @@ void BTserver_Task(void *pvParameters)
 
       BTserver_move(BT_SerialData[0], result);
     }
+
     vTaskDelay(pdMS_TO_TICKS(300));
   }
 }
+
+// void stop_time_Task(void *pvParameters)
+// {
+//   while (1)
+//   {
+//     if (allstop_Status)
+//     {
+//       stop_now_time = millis();
+//       stop_last_time = stop_now_time;
+//       while (allstop_Status)
+//       {
+//         stop_now_time = millis();
+//         if (stop_now_time - stop_last_time >= 1000)
+//         {
+//           Serial2_status = false;
+//           if (last_Serial2_status != Serial2_status)
+//           {
+//             Serial.println("全部电机停止,停止，还有……这个！~");
+//             vTaskDelay(pdMS_TO_TICKS(1000));
+//           }
+//         }
+//       }
+//       last_Serial2_status = Serial2_status;
+//     }
+//     vTaskDelay(pdMS_TO_TICKS(300));
+//   }
+// }
 
 void L1_doEncoder()
 {
@@ -678,6 +726,7 @@ void setup()
   xTaskCreate(moveTask, "电机动作", 1000, NULL, 3, NULL);
   xTaskCreate(BTserver_Task, "通过蓝牙连接Arduino,实现对小车运动状态的更改,以及对PID参数的更改", 1000, NULL, 2, NULL);
   xTaskCreate(motor_Task, "通过改变电机状态，使相应电机动作", 1000, NULL, 3, NULL);
+  // xTaskCreate(stop_time_Task, "如果电机停止动作，并且在之后的一段时间内没有启动，则要停止PID", 1000, NULL, 4, NULL);
 
   attachInterrupt(digitalPinToInterrupt(L1_encoderPin), L1_doEncoder, CHANGE);
   attachInterrupt(digitalPinToInterrupt(R1_encoderPin), R1_doEncoder, CHANGE);
